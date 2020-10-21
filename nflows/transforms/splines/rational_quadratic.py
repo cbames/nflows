@@ -59,6 +59,54 @@ def unconstrained_rational_quadratic_spline(
 
     return outputs, logabsdet
 
+def circular_rational_quadratic_spline(
+    inputs,
+    unnormalized_widths,
+    unnormalized_heights,
+    unnormalized_derivatives,
+    lower_bounds, 
+    upper_bounds,
+    inverse=False,
+    tail_bound=1.0,
+    min_bin_width=DEFAULT_MIN_BIN_WIDTH,
+    min_bin_height=DEFAULT_MIN_BIN_HEIGHT,
+    min_derivative=DEFAULT_MIN_DERIVATIVE,
+    index = 0
+):
+
+    if index % 2 == 0: 
+        lower_bounds = lower_bounds.flip(0)
+        upper_bounds = upper_bounds.flip(0)
+        
+    mod_inputs = torch.zeros_like(inputs).to(inputs.device)
+
+    for (itr,(l,r)) in enumerate(zip(lower_bounds,upper_bounds)):         
+
+        mod_inputs[:,itr] = ( (inputs[:,itr] - l) % (r-l)) + l 
+
+
+
+    (
+        outputs,
+        logabsdet,
+    ) = rational_quadratic_spline(
+        inputs=mod_inputs,
+        unnormalized_widths=unnormalized_widths,
+        unnormalized_heights=unnormalized_heights,
+        unnormalized_derivatives=unnormalized_derivatives,
+        inverse=inverse,
+        left=lower_bounds,
+        right=upper_bounds,
+        bottom=lower_bounds,
+        top=upper_bounds,
+        min_bin_width=min_bin_width,
+        min_bin_height=min_bin_height,
+        min_derivative=min_derivative,
+        index = index 
+    )
+
+    return outputs, logabsdet
+
 
 def rational_quadratic_spline(
     inputs,
@@ -73,22 +121,34 @@ def rational_quadratic_spline(
     min_bin_width=DEFAULT_MIN_BIN_WIDTH,
     min_bin_height=DEFAULT_MIN_BIN_HEIGHT,
     min_derivative=DEFAULT_MIN_DERIVATIVE,
+    index = 0 
 ):
-    if torch.min(inputs) < left or torch.max(inputs) > right:
-        raise InputOutsideDomain()
+
+    # for (itr,(l,r)) in enumerate(zip(left,right)):
+            
+    #     if torch.min(inputs[:,itr]) < l or torch.max(inputs[:,itr]) > r:
+
+    #         if torch.min(inputs[:,itr]) < l: 
+    #              print("lower bound of feature "+str(itr)+ " violated")
+    #         else: 
+    #              print("upper bound of feature "+str(itr)+ " violated")
+    #         raise InputOutsideDomain()
 
     num_bins = unnormalized_widths.shape[-1]
+
 
     if min_bin_width * num_bins > 1.0:
         raise ValueError("Minimal bin width too large for the number of bins")
     if min_bin_height * num_bins > 1.0:
         raise ValueError("Minimal bin height too large for the number of bins")
 
+
     widths = F.softmax(unnormalized_widths, dim=-1)
     widths = min_bin_width + (1 - min_bin_width * num_bins) * widths
     cumwidths = torch.cumsum(widths, dim=-1)
     cumwidths = F.pad(cumwidths, pad=(1, 0), mode="constant", value=0.0)
-    cumwidths = (right - left) * cumwidths + left
+    cumwidths = (right - left).unsqueeze(0).unsqueeze(2) * cumwidths + left.unsqueeze(0).unsqueeze(2)
+    #cumwidths = (right - left) * cumwidths + left
     cumwidths[..., 0] = left
     cumwidths[..., -1] = right
     widths = cumwidths[..., 1:] - cumwidths[..., :-1]
@@ -99,15 +159,21 @@ def rational_quadratic_spline(
     heights = min_bin_height + (1 - min_bin_height * num_bins) * heights
     cumheights = torch.cumsum(heights, dim=-1)
     cumheights = F.pad(cumheights, pad=(1, 0), mode="constant", value=0.0)
-    cumheights = (top - bottom) * cumheights + bottom
-    cumheights[..., 0] = bottom
-    cumheights[..., -1] = top
+    cumheights = (right - left).unsqueeze(0).unsqueeze(2) * cumheights + left.unsqueeze(0).unsqueeze(2)
+    #cumheights = (right - left) * cumheights + left
+    cumheights[..., 0] = left
+    cumheights[..., -1] = right
     heights = cumheights[..., 1:] - cumheights[..., :-1]
 
     if inverse:
         bin_idx = torchutils.searchsorted(cumheights, inputs)[..., None]
+ 
     else:
         bin_idx = torchutils.searchsorted(cumwidths, inputs)[..., None]
+
+    if bin_idx.min() == -1: 
+        import ipdb 
+        ipdb.set_trace()
 
     input_cumwidths = cumwidths.gather(-1, bin_idx)[..., 0]
     input_bin_widths = widths.gather(-1, bin_idx)[..., 0]
@@ -137,6 +203,11 @@ def rational_quadratic_spline(
         # root = (- b + torch.sqrt(discriminant)) / (2 * a)
         outputs = root * input_bin_widths + input_cumwidths
 
+        # clamped_outputs = torch.zeros_like(outputs)
+
+        # for (itr,(l,r)) in enumerate(zip(left,right)):
+        #     clamped_outputs[:,itr] = torch.clamp(outputs[:,itr],l,r)
+
         theta_one_minus_theta = root * (1 - root)
         denominator = input_delta + (
             (input_derivatives + input_derivatives_plus_one - 2 * input_delta)
@@ -161,7 +232,13 @@ def rational_quadratic_spline(
             (input_derivatives + input_derivatives_plus_one - 2 * input_delta)
             * theta_one_minus_theta
         )
+
         outputs = input_cumheights + numerator / denominator
+
+        # clamped_outputs = torch.zeros_like(outputs)
+
+        # for (itr,(l,r)) in enumerate(zip(left,right)):
+        #     clamped_outputs[:,itr] = torch.clamp(outputs[:,itr],l,r)
 
         derivative_numerator = input_delta.pow(2) * (
             input_derivatives_plus_one * theta.pow(2)
