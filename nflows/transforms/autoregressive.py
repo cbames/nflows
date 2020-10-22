@@ -450,7 +450,7 @@ class MaskedPiecewiseCircularRationalQuadraticAutoregressiveTransform(Autoregres
         min_bin_width=rational_quadratic.DEFAULT_MIN_BIN_WIDTH,
         min_bin_height=rational_quadratic.DEFAULT_MIN_BIN_HEIGHT,
         min_derivative=rational_quadratic.DEFAULT_MIN_DERIVATIVE,
-        index = 0 
+        permutation = 0 
     ):
         self.num_bins = num_bins
         self.min_bin_width = min_bin_width
@@ -460,11 +460,13 @@ class MaskedPiecewiseCircularRationalQuadraticAutoregressiveTransform(Autoregres
         self.tail_bound = tail_bound
         self.lower_bounds = lower_bounds
         self.upper_bounds = upper_bounds
-        self.index = index 
+        self.permutation = permutation 
+
 
         autoregressive_net = made_module.MADE(
-            features=features,
+            features=2*features,
             hidden_features=hidden_features,
+            autoregressive_features = features,
             context_features=context_features,
             num_blocks=num_blocks,
             output_multiplier=self._output_dim_multiplier(),
@@ -477,11 +479,14 @@ class MaskedPiecewiseCircularRationalQuadraticAutoregressiveTransform(Autoregres
 
         super().__init__(autoregressive_net)
 
+        self.phase = torch.nn.Parameter(torch.zeros_like(self.lower_bounds))
+
+
     def _output_dim_multiplier(self):
         if self.tails == "linear":
-            return self.num_bins * 3 - 1
+            return int((self.num_bins * 3 - 1)*0.5)
         elif self.tails is None:
-            return self.num_bins * 3 + 1
+            return int((self.num_bins * 3 + 1)*0.5)
         else:
             raise ValueError
 
@@ -514,22 +519,45 @@ class MaskedPiecewiseCircularRationalQuadraticAutoregressiveTransform(Autoregres
         # else:
         #     raise ValueError
 
+
         outputs, logabsdet = circular_rational_quadratic_spline(
             inputs=inputs,
             unnormalized_widths=unnormalized_widths,
             unnormalized_heights=unnormalized_heights,
             unnormalized_derivatives=unnormalized_derivatives,
+            phase = self.phase,
             lower_bounds = self.lower_bounds, 
             upper_bounds = self.upper_bounds, 
             inverse=inverse,
             min_bin_width=self.min_bin_width,
             min_bin_height=self.min_bin_height,
-            min_derivative=self.min_derivative,
-            index = self.index, 
+            min_derivative=self.min_derivative, 
             **spline_kwargs
         )
 
         return outputs, torchutils.sum_except_batch(logabsdet)
+
+    def forward(self, inputs, context=None):
+
+        sin_cos_inputs = torch.cat([torch.sin(inputs), torch.cos(inputs)],dim=1)
+
+        autoregressive_params = self.autoregressive_net(sin_cos_inputs, context)
+        outputs, logabsdet = self._elementwise_forward(inputs, autoregressive_params)
+        return outputs, logabsdet
+
+    def inverse(self, inputs, context=None):
+        num_inputs = np.prod(inputs.shape[1:])
+        outputs = torch.zeros_like(inputs)
+        logabsdet = None
+        for _ in range(num_inputs):
+
+            sin_cos_outputs = torch.cat([torch.sin(outputs), torch.cos(outputs)],dim=1)            
+            autoregressive_params = self.autoregressive_net(sin_cos_outputs, context)
+            outputs, logabsdet = self._elementwise_inverse(
+                inputs, autoregressive_params
+            )
+        return outputs, logabsdet
+
 
     def _elementwise_forward(self, inputs, autoregressive_params):
         return self._elementwise(inputs, autoregressive_params)
