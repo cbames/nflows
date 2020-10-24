@@ -35,12 +35,12 @@ class AutoregressiveTransform(Transform):
         super(AutoregressiveTransform, self).__init__()
         self.autoregressive_net = autoregressive_net
 
-    def forward(self, inputs, context=None):
+    def inverse(self, inputs, context=None):
         autoregressive_params = self.autoregressive_net(inputs, context)
         outputs, logabsdet = self._elementwise_forward(inputs, autoregressive_params)
         return outputs, logabsdet
 
-    def inverse(self, inputs, context=None):
+    def forward(self, inputs, context=None):
         num_inputs = np.prod(inputs.shape[1:])
         outputs = torch.zeros_like(inputs)
         logabsdet = None
