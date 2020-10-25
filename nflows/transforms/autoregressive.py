@@ -31,25 +31,43 @@ class AutoregressiveTransform(Transform):
     forward transform, where D is the dimensionality of the input to the transform.
     """
 
-    def __init__(self, autoregressive_net):
+    def __init__(self, autoregressive_net, iaf=False):
         super(AutoregressiveTransform, self).__init__()
         self.autoregressive_net = autoregressive_net
+        self.iaf = iaf 
 
     def forward(self, inputs, context=None):
-        autoregressive_params = self.autoregressive_net(inputs, context)
-        outputs, logabsdet = self._elementwise_forward(inputs, autoregressive_params)
-        return outputs, logabsdet
+        if iaf: 
+            num_inputs = np.prod(inputs.shape[1:])
+            outputs = torch.zeros_like(inputs)
+            logabsdet = None
+            for _ in range(num_inputs):
+                autoregressive_params = self.autoregressive_net(outputs, context)
+                outputs, logabsdet = self._elementwise_inverse(
+                    inputs, autoregressive_params
+                )
+            return outputs, logabsdet
+        else:    
+            autoregressive_params = self.autoregressive_net(inputs, context)
+            outputs, logabsdet = self._elementwise_forward(inputs, autoregressive_params)
+            return outputs, logabsdet
 
     def inverse(self, inputs, context=None):
-        num_inputs = np.prod(inputs.shape[1:])
-        outputs = torch.zeros_like(inputs)
-        logabsdet = None
-        for _ in range(num_inputs):
-            autoregressive_params = self.autoregressive_net(outputs, context)
-            outputs, logabsdet = self._elementwise_inverse(
-                inputs, autoregressive_params
-            )
-        return outputs, logabsdet
+        if iaf: 
+            autoregressive_params = self.autoregressive_net(inputs, context)
+            outputs, logabsdet = self._elementwise_forward(inputs, autoregressive_params)
+            return outputs, logabsdet
+
+        else:
+            num_inputs = np.prod(inputs.shape[1:])
+            outputs = torch.zeros_like(inputs)
+            logabsdet = None
+            for _ in range(num_inputs):
+                autoregressive_params = self.autoregressive_net(outputs, context)
+                outputs, logabsdet = self._elementwise_inverse(
+                    inputs, autoregressive_params
+                )
+            return outputs, logabsdet
 
     def _output_dim_multiplier(self):
         raise NotImplementedError()
@@ -354,6 +372,7 @@ class MaskedPiecewiseRationalQuadraticAutoregressiveTransform(AutoregressiveTran
         min_bin_width=rational_quadratic.DEFAULT_MIN_BIN_WIDTH,
         min_bin_height=rational_quadratic.DEFAULT_MIN_BIN_HEIGHT,
         min_derivative=rational_quadratic.DEFAULT_MIN_DERIVATIVE,
+        iaf = False
     ):
         self.num_bins = num_bins
         self.min_bin_width = min_bin_width
@@ -375,7 +394,7 @@ class MaskedPiecewiseRationalQuadraticAutoregressiveTransform(AutoregressiveTran
             use_batch_norm=use_batch_norm,
         )
 
-        super().__init__(autoregressive_net)
+        super().__init__(autoregressive_net, iaf= iaf)
 
     def _output_dim_multiplier(self):
         if self.tails == "linear":
