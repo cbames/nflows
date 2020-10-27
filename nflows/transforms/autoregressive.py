@@ -37,7 +37,7 @@ class AutoregressiveTransform(Transform):
         self.iaf = iaf 
 
     def forward(self, inputs, context=None):
-        if iaf: 
+        if self.iaf: 
             num_inputs = np.prod(inputs.shape[1:])
             outputs = torch.zeros_like(inputs)
             logabsdet = None
@@ -53,7 +53,7 @@ class AutoregressiveTransform(Transform):
             return outputs, logabsdet
 
     def inverse(self, inputs, context=None):
-        if iaf: 
+        if self.iaf: 
             autoregressive_params = self.autoregressive_net(inputs, context)
             outputs, logabsdet = self._elementwise_forward(inputs, autoregressive_params)
             return outputs, logabsdet

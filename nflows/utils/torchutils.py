@@ -131,10 +131,10 @@ def create_random_binary_mask(features):
     return mask
 
 
-def searchsorted(bin_locations, inputs, eps=1e-3):
+def searchsorted(bin_locations, inputs, eps=1e-6):
     bin_locations[..., -1] += eps
 
-    return torch.searchsorted(bin_locations, inputs[..., None].detach(), right=True).squeeze() -1 #torch.sum(inputs[..., None] >= bin_locations, dim=-1) - 1
+    return torch.sum(inputs[..., None] >= bin_locations, dim=-1) - 1#torch.searchsorted(bin_locations, inputs[..., None].detach(), right=True).squeeze() -1 #torch.sum(inputs[..., None] >= bin_locations, dim=-1) - 1
 
 
 def cbrt(x):
