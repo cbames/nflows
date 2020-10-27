@@ -51,7 +51,7 @@ class BoxUniform(Distribution):
         context_size = 1 if context is None else context.shape[0]
         low_expanded =  self._low.expand(context_size  * num_samples, *self._shape)
         high_expanded = self._high.expand(context_size * num_samples, *self._shape)
-        samples = low_expanded + torch.rand(context_size * num_samples, *self._shape)*(high_expanded - low_expanded)
+        samples = low_expanded + torch.rand(context_size * num_samples, *self._shape).to(low.device)*(high_expanded - low_expanded)
 
         if context is None:
             return samples
