@@ -37,7 +37,6 @@ class Flow(Distribution):
     def _log_prob(self, inputs, context):
         embedded_context = self._embedding_net(context)
         noise, logabsdet = self._transform(inputs, context=embedded_context)
-        print("noise in log prob:", noise)
         log_prob = self._distribution.log_prob(noise, context=embedded_context)
         return log_prob + logabsdet
 
@@ -69,8 +68,6 @@ class Flow(Distribution):
         noise, log_prob = self._distribution.sample_and_log_prob(
             num_samples, context=embedded_context
         )
-
-        print("noise in s and log:", noise )
 
         if embedded_context is not None:
             # Merge the context dimension with sample dimension in order to apply the transform.
