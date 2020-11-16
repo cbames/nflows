@@ -213,7 +213,6 @@ class MADE(nn.Module):
         self,
         features,
         hidden_features,
-        autoregressive_features = 0,
         context_features=None,
         num_blocks=2,
         output_multiplier=1,
@@ -227,14 +226,11 @@ class MADE(nn.Module):
             raise ValueError("Residual blocks can't be used with random masks.")
         super().__init__()
 
-        if autoregressive_features == 0: 
-            autoregressive_features = features 
-
         # Initial layer.
         self.initial_layer = MaskedLinear(
             in_degrees=_get_input_degrees(features),
             out_features=hidden_features,
-            autoregressive_features=autoregressive_features,
+            autoregressive_features=features,
             random_mask=random_mask,
             is_output=False,
         )
@@ -255,7 +251,7 @@ class MADE(nn.Module):
             blocks.append(
                 block_constructor(
                     in_degrees=prev_out_degrees,
-                    autoregressive_features=autoregressive_features,
+                    autoregressive_features=features,
                     context_features=context_features,
                     random_mask=random_mask,
                     activation=activation,
@@ -270,8 +266,8 @@ class MADE(nn.Module):
         # Final layer.
         self.final_layer = MaskedLinear(
             in_degrees=prev_out_degrees,
-            out_features=features* output_multiplier,
-            autoregressive_features=autoregressive_features,
+            out_features=features * output_multiplier,
+            autoregressive_features=features,
             random_mask=random_mask,
             is_output=True,
         )

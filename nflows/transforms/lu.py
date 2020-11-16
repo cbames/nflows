@@ -75,6 +75,11 @@ class LULinear(Linear):
             D = num of features
             N = num of inputs
         """
+
+        if inputs.isnan().any() or (inputs > 1e25).any() :
+            import pdb 
+            pdb.set_trace()
+
         lower, upper = self._create_lower_upper()
         outputs = inputs - self.bias
         outputs, _ = torch.triangular_solve(
@@ -84,6 +89,10 @@ class LULinear(Linear):
             outputs, upper, upper=True, unitriangular=False
         )
         outputs = outputs.t()
+
+        if outputs.isnan().any() or (outputs > 1e25).any(): 
+            import pdb 
+            pdb.set_trace()
 
         logabsdet = -self.logabsdet()
         logabsdet = logabsdet * inputs.new_ones(outputs.shape[0])
