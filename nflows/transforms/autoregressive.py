@@ -33,43 +33,25 @@ class AutoregressiveTransform(Transform):
     def __init__(self, autoregressive_net, iaf=False):
         super(AutoregressiveTransform, self).__init__()
         self.autoregressive_net = autoregressive_net
-        self.iaf = iaf 
-
+        
     def forward(self, inputs, context=None):
-        if self.iaf: 
-            num_inputs = np.prod(inputs.shape[1:])
-            outputs = torch.zeros_like(inputs)
-            logabsdet = None
-            for _ in range(num_inputs):
-                autoregressive_params = self.autoregressive_net(outputs, context)
-                outputs, logabsdet = self._elementwise_inverse(
-                    inputs, autoregressive_params
-                )
-            return outputs, logabsdet
-        else:    
-            autoregressive_params = self.autoregressive_net(inputs, context)
-            outputs, logabsdet = self._elementwise_forward(inputs, autoregressive_params)
-            return outputs, logabsdet
+        autoregressive_params = self.autoregressive_net(inputs, context)
+        outputs, logabsdet = self._elementwise_forward(inputs, autoregressive_params)
+        return outputs, logabsdet
 
     def inverse(self, inputs, context=None):
-        if self.iaf: 
-            autoregressive_params = self.autoregressive_net(inputs, context)
-            outputs, logabsdet = self._elementwise_forward(inputs, autoregressive_params)
-            return outputs, logabsdet
-
-        else:
-            num_inputs = np.prod(inputs.shape[1:])
-            outputs = torch.zeros_like(inputs)
-            logabsdet = None
-            for i in range(num_inputs):
-                autoregressive_params = self.autoregressive_net(outputs, context)
-                outputs, logabsdet = self._elementwise_inverse(
-                    inputs, autoregressive_params
-                )
-                if outputs.isnan().any() or inputs.isnan().any(): 
-                    import pdb 
-                    pdb.set_trace()
-            return outputs, logabsdet
+        num_inputs = np.prod(inputs.shape[1:])
+        outputs = torch.zeros_like(inputs)
+        logabsdet = None
+        for i in range(num_inputs):
+            autoregressive_params = self.autoregressive_net(outputs, context)
+            outputs, logabsdet = self._elementwise_inverse(
+                inputs, autoregressive_params
+            )
+            if outputs.isnan().any() or inputs.isnan().any(): 
+                import pdb 
+                pdb.set_trace()
+        return outputs, logabsdet
 
     def _output_dim_multiplier(self):
         raise NotImplementedError()
